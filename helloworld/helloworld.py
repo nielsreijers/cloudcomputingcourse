@@ -3,11 +3,10 @@ import datetime
 import urllib
 import webapp2
 import os
-import urllib
 import jinja2
 
 from google.appengine.api import users
-from google.appengine.ext import db
+from google.appengine.ext import ndb
 
 
 JINJA_ENVIRONMENT = jinja2.Environment(
@@ -19,26 +18,40 @@ MAIN_PAGE_FOOTER_TEMPLATE = """\
       <div><textarea name="content" rows="3" cols="60"></textarea></div>
       <div><input type="submit" value="Sign Guestbook"></div>
     </form>
+
     <hr>
-    <form>Guestbook name: <input value="%s" name="guestbook_name">
-    <input type="submit" value="switch"></form>
+
+    <form>Guestbook name:
+      <input value="%s" name="guestbook_name">
+      <input type="submit" value="switch">
+    </form>
+
+    <a href="%s">%s</a>
+
   </body>
 </html>
 """
 
-class Greeting(db.Model):
-	"""Models an individual Guestbook entry with author, content, and date."""
-	author = db.StringProperty()
-	content = db.StringProperty(multiline=True)
-	date = db.DateTimeProperty(auto_now_add=True)
+DEFAULT_GUESTBOOK_NAME = 'default_guestbook'
 
-def guestbook_key(guestbook_name=None):
+
+# We set a parent key on the 'Greetings' to ensure that they are all in the same
+# entity group. Queries across the single entity group will be consistent.
+# However, the write rate should be limited to ~1/second.
+
+def guestbook_key(guestbook_name=DEFAULT_GUESTBOOK_NAME):
 	"""Constructs a Datastore key for a Guestbook entity with guestbook_name."""
-	return db.Key.from_path('Guestbook', guestbook_name or 'default_guestbook')
+	return ndb.Key('Guestbook', guestbook_name)	
+
+class Greeting(ndb.Model):
+    """Models an individual Guestbook entry with author, content, and date."""
+    author = ndb.UserProperty()
+    content = ndb.StringProperty(indexed=False)
+    date = ndb.DateTimeProperty(auto_now_add=True)
 
 class MainPage(webapp2.RequestHandler):
 	def get(self):
-		guestbook_name = self.request.get('guestbook_name')
+		guestbook_name = self.request.get('guestbook_name', DEFAULT_GUESTBOOK_NAME)
 		# Ancestor Queries, as shown here, are strongly consistent with the High
 		# Replication Datastore. Queries that span entity groups are eventually
 		# consistent. If we omitted the ancestor from this query there would be
@@ -56,10 +69,13 @@ class MainPage(webapp2.RequestHandler):
 			url = users.create_login_url(self.request.uri)
 			url_linktext = "Login"
 
+		print guestbook_name
 		template_values = {'greetings': greetings,
-							'guestbook_name': url.urlencode(guestbook_name),
-							'url': url,
-							'url_linktext': url_linktext}
+											'guestbook_name': guestbook_name,
+											'url': url,
+											'url_linktext': url_linktext}
+
+		print template_values
 
 		template = JINJA_ENVIRONMENT.get_template('index.html')
 		self.response.write(template.render(template_values))
@@ -71,16 +87,13 @@ class Guestbook(webapp2.RequestHandler):
 		# will be consistent. However, the write rate to a single entity group
 		# should be limited to ~1/second.
 
-		guestbook_name = self.request.get('guestbook_name')
+		guestbook_name = self.request.get('guestbook_name', DEFAULT_GUESTBOOK_NAME)
 		greeting = Greeting(parent=guestbook_key(guestbook_name))
 
 		if users.get_current_user():
-			greeting.author = users.get_current_user().nickname()
-
-		print users.get_current_user().nickname()
+			greeting.author = users.get_current_user()
 
 		greeting.content = self.request.get('content')
-		print greeting
 		greeting.put()
 
 		query_params = {'guestbook_name': guestbook_name}
