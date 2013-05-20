@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+{% autoescape true %}
+<html>
+  <head>
+    <link type="text/css" rel="stylesheet" href="/stylesheets/main.css" />
+  </head>
+  <body>
+    Sensors:<br>
+    {% for sensor in sensors %}
+      <b>{{ sensor.name|safe }}</b><br>
+      {% for sample in sensor.samples %}
+        Time: {{ sample.time }}, value: {{ sample.value }}<br>
+      {% endfor %}
+      <br>
+    {% endfor %}
+  </body>
+</html>
+{% endautoescape %}
