@@ -33,6 +33,8 @@ class WKSample(ndb.Model):
 
 class SensorLog(webapp2.RequestHandler):
 	def get_sensors1(self, application_name):
+		"""Get all sensors for the application first, then get all samples per sensor.
+		First attempt. It works, but causes multiple queries, which probably isn't efficient if we want all samples."""
 		sensors = WKSensor.query(ancestor=WKApplication.key_for_application(application_name))
 
 		# TODO: There must be a better way to do this? Can't I get all sensors and values in one query?
@@ -40,10 +42,36 @@ class SensorLog(webapp2.RequestHandler):
 			sensor.samples = WKSample.query(ancestor=sensor.key).fetch()
 		return sensors
 
+	def get_sensors2(self, application_name):
+		"""Get everything for this application at once. Probably not a good idea if it's too much data, but
+		if we do want everything, this should be more efficient than the previous query.
+		The processing to change the flat list into a hierarchy of sensors and samples should be fast enough
+		since it's just two simple passes over the list"""
+		query = ndb.gql("SELECT * WHERE ANCESTOR IS :1 ORDER BY __key__", WKApplication.key_for_application(application_name))
+
+		# Would this be sorted by __key__ as well? I'm not sure how to force that using this syntax.
+		# query = ndb.Query(ancestor=WKApplication.key_for_application(application_name))
+
+		# At this point we get a list containing the Application object first, followed by sensors
+		# with all the samples for each sensor directly after that sensor object. (since it's sorted on __key__)
+		# This means we don't need to search the list for the matching sensor, but can just use the last one we came across.
+		current_sensor = None
+		results = query.fetch()
+		print results
+		for result in results:
+			if isinstance(result, WKSensor):
+				current_sensor = result
+				current_sensor.samples = []
+			if isinstance(result, WKSample):
+				current_sensor.samples.append(result)
+
+		sensors = [result for result in results if isinstance(result, WKSensor)] # Just return the sensors, samples are now in a sublist
+		return sensors
+
 	def get(self):
 		application_name = self.request.get('application')
 
-		sensors = self.get_sensors1(application_name)
+		sensors = self.get_sensors2(application_name)
 
 		template_values = {'sensors': sensors,
 						'application': application_name}
