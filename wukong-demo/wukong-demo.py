@@ -18,6 +18,10 @@ class WKApplication(ndb.Model):
 	"""Root object which models an wukong application"""
 	name = ndb.StringProperty()
 
+	@staticmethod
+	def key_for_application(application_name):
+		return ndb.Key('WKApplication', application_name)
+
 class WKSensor(ndb.Model):
 	"""Models a sensor in an wukong application"""
 	name = ndb.StringProperty()
@@ -28,8 +32,8 @@ class WKSample(ndb.Model):
 	time = ndb.DateTimeProperty(auto_now_add=True)
 
 class SensorLog(webapp2.RequestHandler):
-	def getSensors1(self, application_name):
-		sensors = WKSensor.query(ancestor=ndb.Key('WKApplication', application_name))
+	def get_sensors1(self, application_name):
+		sensors = WKSensor.query(ancestor=WKApplication.key_for_application(application_name))
 
 		# TODO: There must be a better way to do this? Can't I get all sensors and values in one query?
 		for sensor in sensors:
@@ -39,7 +43,7 @@ class SensorLog(webapp2.RequestHandler):
 	def get(self):
 		application_name = self.request.get('application')
 
-		sensors = self.getSensors1(application_name)
+		sensors = self.get_sensors1(application_name)
 
 		template_values = {'sensors': sensors,
 						'application': application_name}
