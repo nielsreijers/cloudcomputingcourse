@@ -26,13 +26,8 @@ class WKSensor(ndb.Model):
 	"""Models a sensor in an wukong application"""
 	name = ndb.StringProperty()
 
-class WKSample(ndb.Model):
-	"""Models a single measurement in a wukong application"""
-	value = ndb.IntegerProperty()
-	time = ndb.DateTimeProperty(auto_now_add=True)
-
-class SensorLog(webapp2.RequestHandler):
-	def get_sensors1(self, application_name):
+	@staticmethod
+	def get_sensor_data1(application_name):
 		"""Get all sensors for the application first, then get all samples per sensor.
 		First attempt. It works, but causes multiple queries, which probably isn't efficient if we want all samples."""
 		sensors = WKSensor.query(ancestor=WKApplication.key_for_application(application_name))
@@ -42,7 +37,8 @@ class SensorLog(webapp2.RequestHandler):
 			sensor.samples = WKSample.query(ancestor=sensor.key).fetch()
 		return sensors
 
-	def get_sensors2(self, application_name):
+	@staticmethod
+	def get_sensor_data2(application_name):
 		"""Get everything for this application at once. Probably not a good idea if it's too much data, but
 		if we do want everything, this should be more efficient than the previous query.
 		The processing to change the flat list into a hierarchy of sensors and samples should be fast enough
@@ -68,7 +64,8 @@ class SensorLog(webapp2.RequestHandler):
 		sensors = [result for result in results if isinstance(result, WKSensor)] # Just return the sensors, samples are now in a sublist
 		return sensors
 
-	def get_sensors3(self, application_name):
+	@staticmethod
+	def get_sensor_data3(application_name):
 		"""Trying something inbetween: get all sensors first, then get all samples with ancestor in those sensors"""
 		sensors = WKSensor.query(ancestor=WKApplication.key_for_application(application_name)).fetch()
 		samples = WKSample.query(ancestor=WKApplication.key_for_application(application_name)).fetch()
@@ -80,10 +77,17 @@ class SensorLog(webapp2.RequestHandler):
 
 		return sensors
 
+class WKSample(ndb.Model):
+	"""Models a single measurement in a wukong application"""
+	value = ndb.IntegerProperty()
+	time = ndb.DateTimeProperty(auto_now_add=True)
+
+class SensorLog(webapp2.RequestHandler):
+
 	def get(self):
 		application_name = self.request.get('application')
 
-		sensors = self.get_sensors3(application_name)
+		sensors = WKSensor.get_sensor_data2(application_name)
 
 		template_values = {'sensors': sensors,
 						'application': application_name}
