@@ -68,10 +68,22 @@ class SensorLog(webapp2.RequestHandler):
 		sensors = [result for result in results if isinstance(result, WKSensor)] # Just return the sensors, samples are now in a sublist
 		return sensors
 
+	def get_sensors3(self, application_name):
+		"""Trying something inbetween: get all sensors first, then get all samples with ancestor in those sensors"""
+		sensors = WKSensor.query(ancestor=WKApplication.key_for_application(application_name)).fetch()
+		samples = WKSample.query(ancestor=WKApplication.key_for_application(application_name)).fetch()
+
+		# This works, but wasn't really was I was looking for. I seems you can't select from multiple ancestors
+		# (I wanted to do something like "'ANCESTOR IN :1', [x.key for x in sensors]")
+		for sensor in sensors:
+			sensor.samples = [sample for sample in samples if sample.key.parent() == sensor.key]
+
+		return sensors
+
 	def get(self):
 		application_name = self.request.get('application')
 
-		sensors = self.get_sensors2(application_name)
+		sensors = self.get_sensors3(application_name)
 
 		template_values = {'sensors': sensors,
 						'application': application_name}
