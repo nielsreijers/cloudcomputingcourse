@@ -5,7 +5,7 @@
     <link type="text/css" rel="stylesheet" href="/stylesheets/main.css" />
   </head>
   <body>
-    Sensors:<br>
+    <h3>Sensors:</h3><br>
     {% for sensor in sensors %}
       <b>{{ sensor.name|safe }}</b><br>
       {% for sample in sensor.samples %}
@@ -13,6 +13,16 @@
       {% endfor %}
       <br>
     {% endfor %}
+    <hr>
+    <h3>Manually enter a sample:</h3>
+
+    <form action="/logsample" method="post">
+      Application: <input value="{{ application }}" name="application"><br>
+      Sensor: <input value="" name="sensor"><br>
+      Value: <input value="" name="value"><br>
+      <input type="submit" value="submit">
+    </form>
+
   </body>
 </html>
 {% endautoescape %}

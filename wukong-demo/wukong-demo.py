@@ -41,11 +41,15 @@ class SensorLog(webapp2.RequestHandler):
 		for sensor in sensors:
 			sensor.samples = WKSample.query(ancestor=sensor.key).fetch()
 
-		template_values = {'sensors': sensors}
+		template_values = {'sensors': sensors,
+						'application': application_name}
 		template = JINJA_ENVIRONMENT.get_template('sensor_log.html')
 		self.response.write(template.render(template_values))
 
 class LogSample(webapp2.RequestHandler):
+	def post(self):
+		return self.get()
+
 	def get(self):
 		"""Logs a sample to the data store under the specified application and sensor name
 		Application and sensor will be created if they don't exist yet."""
