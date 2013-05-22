@@ -14,18 +14,13 @@ JINJA_ENVIRONMENT = jinja2.Environment(
     extensions=['jinja2.ext.autoescape'])
 
 
-# Let's see if I can delay creating the application objects and just the key as ancestors for WKSensor
-# class WKApplication(ndb.Model):
-# 	"""Root object which models an wukong application"""
-# 	name = ndb.StringProperty()
+class WKApplication(ndb.Model):
+	"""Root object which models an wukong application"""
+	name = ndb.StringProperty()
 
 class WKSensor(ndb.Model):
 	"""Models a sensor in an wukong application"""
 	name = ndb.StringProperty()
-
-	@staticmethod
-	def wksensor_parent_key(application_name):
-		return ndb.Key('WKApplication', application_name)
 
 class WKSample(ndb.Model):
 	"""Models a single measurement in a wukong application"""
@@ -35,7 +30,7 @@ class WKSample(ndb.Model):
 class SensorLog(webapp2.RequestHandler):
 	def get(self):
 		application_name = self.request.get('application')
-		sensors = WKSensor.query(ancestor=WKSensor.wksensor_parent_key(application_name))
+		sensors = WKSensor.query(ancestor=ndb.Key('WKApplication', application_name))
 
 		# TODO: There must be a better way to do this? Can't I get all sensors and values in one query?
 		for sensor in sensors:
@@ -57,8 +52,11 @@ class LogSample(webapp2.RequestHandler):
 		sensor_name = self.request.get('sensor')
 		value = self.request.get('value')
 
+		application = WKApplication.get_or_insert(application_name,
+													name=application_name)
+
 		sensor = WKSensor.get_or_insert(sensor_name,
-										parent=WKSensor.wksensor_parent_key(application_name),
+										parent=application.key,
 										name=sensor_name)
 
 		sample = WKSample(parent=sensor.key,
