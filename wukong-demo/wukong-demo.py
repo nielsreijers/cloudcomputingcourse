@@ -14,6 +14,17 @@ JINJA_ENVIRONMENT = jinja2.Environment(
     extensions=['jinja2.ext.autoescape'])
 
 
+# Data model requirements:
+# One application will have several sensors.
+# Sensors log values at set intervals. Maximum frequency: 1 sample/second
+# Applications will run for months.
+# -> Several samples per second per application
+# -> Possibly millions of samples per sensor
+
+# Since there's a limit of 1 write/second per entity group,
+# this suggests sensors+their samples can be a group, but the
+# link from sensor to application should be a reference instead
+
 class WKApplication(ndb.Model):
 	"""Root object which models an wukong application"""
 	name = ndb.StringProperty()
@@ -82,6 +93,24 @@ class WKSample(ndb.Model):
 	value = ndb.IntegerProperty()
 	time = ndb.DateTimeProperty(auto_now_add=True)
 
+	@staticmethod
+	def logSample(application_name, sensor_name, value, time=None):
+		application = WKApplication.get_or_insert(application_name,
+													name=application_name)
+
+		sensor = WKSensor.get_or_insert(sensor_name,
+										parent=application.key,
+										name=sensor_name)
+
+		if time==None:
+			sample = WKSample(parent=sensor.key,
+							value = int(value))
+		else:
+			sample = WKSample(parent=sensor.key,
+							value = int(value),
+							time = time)
+		sample.put()
+
 class SensorLog(webapp2.RequestHandler):
 
 	def get(self):
@@ -105,22 +134,26 @@ class LogSample(webapp2.RequestHandler):
 		sensor_name = self.request.get('sensor')
 		value = self.request.get('value')
 
-		application = WKApplication.get_or_insert(application_name,
-													name=application_name)
-
-		sensor = WKSensor.get_or_insert(sensor_name,
-										parent=application.key,
-										name=sensor_name)
-
-		sample = WKSample(parent=sensor.key,
-						value = int(value))
-		sample.put()
+		WKSample.logSample(application_name, sensor_name, value)
 
 		query_params = {'application': application_name}
 		self.redirect('/sensorlog?' + urllib.urlencode(query_params))
 
+class CreateTestData(webapp2.RequestHandler):
+	def get(self):
+		application_name = 'testapp'
+		time = datetime.datetime.now()
+		time += datetime.timedelta(days=-1)
+		for sensor_name in ['a', 'b', 'c']:
+			for value in range(100):
+				WKSample.logSample(application_name, sensor_name, value, time=time)
+				time += datetime.timedelta(minutes=1)
+		query_params = {'application': 'testapp'}
+		self.redirect('/sensorlog?' + urllib.urlencode(query_params))
+
 
 app = webapp2.WSGIApplication([('/sensorlog', SensorLog),
-								('/logsample', LogSample)],
+								('/logsample', LogSample),
+								('/createtestdata', CreateTestData)],
                               debug=True)
 
