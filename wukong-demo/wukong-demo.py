@@ -32,17 +32,18 @@ class WKApplication(ndb.Model):
 
 	@staticmethod
 	def key_for_application(application_name):
-		return ndb.Key('WKApplication', application_name)
+		return ndb.Key(WKApplication, application_name)
 
 class WKSensor(ndb.Model):
 	"""Models a sensor in an wukong application"""
 	name = ndb.StringProperty()
+	application_key = ndb.KeyProperty(kind=WKApplication)
 
 	@staticmethod
 	def get_sensor_data1(application_name):
 		"""Get all sensors for the application first, then get all samples per sensor.
 		First attempt. It works, but causes multiple queries, which probably isn't efficient if we want all samples."""
-		sensors = WKSensor.query(ancestor=WKApplication.key_for_application(application_name))
+		sensors = WKSensor.query(WKSensor.application_key==WKApplication.key_for_application(application_name))
 
 		# TODO: There must be a better way to do this? Can't I get all sensors and values in one query?
 		for sensor in sensors:
@@ -50,45 +51,45 @@ class WKSensor(ndb.Model):
 			sensor.samples = sorted(samples, key=operator.attrgetter('time'))
 		return sensors
 
-	@staticmethod
-	def get_sensor_data2(application_name):
-		"""Get everything for this application at once. Probably not a good idea if it's too much data, but
-		if we do want everything, this should be more efficient than the previous query.
-		The processing to change the flat list into a hierarchy of sensors and samples should be fast enough
-		since it's just two simple passes over the list"""
-		query = ndb.gql("SELECT * WHERE ANCESTOR IS :1 ORDER BY __key__", WKApplication.key_for_application(application_name))
+	# @staticmethod
+	# def get_sensor_data2(application_name):
+	# 	"""Get everything for this application at once. Probably not a good idea if it's too much data, but
+	# 	if we do want everything, this should be more efficient than the previous query.
+	# 	The processing to change the flat list into a hierarchy of sensors and samples should be fast enough
+	# 	since it's just two simple passes over the list"""
+	# 	query = ndb.gql("SELECT * WHERE ANCESTOR IS :1 ORDER BY __key__", WKApplication.key_for_application(application_name))
 
-		# Would this be sorted by __key__ as well? I'm not sure how to force that using this syntax.
-		# query = ndb.Query(ancestor=WKApplication.key_for_application(application_name))
+	# 	# Would this be sorted by __key__ as well? I'm not sure how to force that using this syntax.
+	# 	# query = ndb.Query(ancestor=WKApplication.key_for_application(application_name))
 
-		# At this point we get a list containing the Application object first, followed by sensors
-		# with all the samples for each sensor directly after that sensor object. (since it's sorted on __key__)
-		# This means we don't need to search the list for the matching sensor, but can just use the last one we came across.
-		current_sensor = None
-		results = query.fetch()
-		print results
-		for result in results:
-			if isinstance(result, WKSensor):
-				current_sensor = result
-				current_sensor.samples = []
-			if isinstance(result, WKSample):
-				current_sensor.samples.append(result)
+	# 	# At this point we get a list containing the Application object first, followed by sensors
+	# 	# with all the samples for each sensor directly after that sensor object. (since it's sorted on __key__)
+	# 	# This means we don't need to search the list for the matching sensor, but can just use the last one we came across.
+	# 	current_sensor = None
+	# 	results = query.fetch()
+	# 	print results
+	# 	for result in results:
+	# 		if isinstance(result, WKSensor):
+	# 			current_sensor = result
+	# 			current_sensor.samples = []
+	# 		if isinstance(result, WKSample):
+	# 			current_sensor.samples.append(result)
 
-		sensors = [result for result in results if isinstance(result, WKSensor)] # Just return the sensors, samples are now in a sublist
-		return sensors
+	# 	sensors = [result for result in results if isinstance(result, WKSensor)] # Just return the sensors, samples are now in a sublist
+	# 	return sensors
 
-	@staticmethod
-	def get_sensor_data3(application_name):
-		"""Trying something inbetween: get all sensors first, then get all samples with ancestor in those sensors"""
-		sensors = WKSensor.query(ancestor=WKApplication.key_for_application(application_name)).fetch()
-		samples = WKSample.query(ancestor=WKApplication.key_for_application(application_name)).fetch()
+	# @staticmethod
+	# def get_sensor_data3(application_name):
+	# 	"""Trying something inbetween: get all sensors first, then get all samples with ancestor in those sensors"""
+	# 	sensors = WKSensor.query(ancestor=WKApplication.key_for_application(application_name)).fetch()
+	# 	samples = WKSample.query(ancestor=WKApplication.key_for_application(application_name)).fetch()
 
-		# This works, but wasn't really was I was looking for. I seems you can't select from multiple ancestors
-		# (I wanted to do something like "'ANCESTOR IN :1', [x.key for x in sensors]")
-		for sensor in sensors:
-			sensor.samples = [sample for sample in samples if sample.key.parent() == sensor.key]
+	# 	# This works, but wasn't really was I was looking for. I seems you can't select from multiple ancestors
+	# 	# (I wanted to do something like "'ANCESTOR IN :1', [x.key for x in sensors]")
+	# 	for sensor in sensors:
+	# 		sensor.samples = [sample for sample in samples if sample.key.parent() == sensor.key]
 
-		return sensors
+	# 	return sensors
 
 class WKSample(ndb.Model):
 	"""Models a single measurement in a wukong application"""
@@ -101,7 +102,7 @@ class WKSample(ndb.Model):
 													name=application_name)
 
 		sensor = WKSensor.get_or_insert(sensor_name,
-										parent=application.key,
+										application_key=application.key,
 										name=sensor_name)
 
 		if time==None:
@@ -142,18 +143,22 @@ class LogSample(webapp2.RequestHandler):
 		self.redirect('/sensorlog?' + urllib.urlencode(query_params))
 
 class CreateTestData(webapp2.RequestHandler):
-	@ndb.transactional
-	def get(self):
-		application_name = 'testapp2'
+	@ndb.transactional(xg=True)
+	def createWithCrossGroupTransaction(self):
+		application_name = 'testapp'
 		time = datetime.datetime.now()
 		time += datetime.timedelta(days=-1)
 		for sensor_name in ['a', 'b', 'c']:
 			for value in range(100):
 				WKSample.logSample(application_name, sensor_name, value, time=time)
 				time += datetime.timedelta(minutes=1)
-		query_params = {'application': 'testapp2'}
+		query_params = {'application': 'testapp'}
 		self.redirect('/sensorlog?' + urllib.urlencode(query_params))
 
+	def get(self):
+		self.createWithCrossGroupTransaction()
+		query_params = {'application': 'testapp'}
+		self.redirect('/sensorlog?' + urllib.urlencode(query_params))
 
 app = webapp2.WSGIApplication([('/sensorlog', SensorLog),
 								('/logsample', LogSample),
