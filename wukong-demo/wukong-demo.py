@@ -4,6 +4,7 @@ import urllib
 import webapp2
 import os
 import jinja2
+import operator
 
 from google.appengine.api import users
 from google.appengine.ext import ndb
@@ -45,7 +46,8 @@ class WKSensor(ndb.Model):
 
 		# TODO: There must be a better way to do this? Can't I get all sensors and values in one query?
 		for sensor in sensors:
-			sensor.samples = WKSample.query(ancestor=sensor.key).fetch()
+			samples = WKSample.query(ancestor=sensor.key).fetch()
+			sensor.samples = sorted(samples, key=operator.attrgetter('time'))
 		return sensors
 
 	@staticmethod
@@ -116,7 +118,7 @@ class SensorLog(webapp2.RequestHandler):
 	def get(self):
 		application_name = self.request.get('application')
 
-		sensors = WKSensor.get_sensor_data2(application_name)
+		sensors = WKSensor.get_sensor_data1(application_name)
 
 		template_values = {'sensors': sensors,
 						'application': application_name}
@@ -142,14 +144,14 @@ class LogSample(webapp2.RequestHandler):
 class CreateTestData(webapp2.RequestHandler):
 	@ndb.transactional
 	def get(self):
-		application_name = 'testapp'
+		application_name = 'testapp2'
 		time = datetime.datetime.now()
 		time += datetime.timedelta(days=-1)
 		for sensor_name in ['a', 'b', 'c']:
 			for value in range(100):
 				WKSample.logSample(application_name, sensor_name, value, time=time)
 				time += datetime.timedelta(minutes=1)
-		query_params = {'application': 'testapp'}
+		query_params = {'application': 'testapp2'}
 		self.redirect('/sensorlog?' + urllib.urlencode(query_params))
 
 
