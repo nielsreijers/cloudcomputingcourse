@@ -140,6 +140,7 @@ class LogSample(webapp2.RequestHandler):
 		self.redirect('/sensorlog?' + urllib.urlencode(query_params))
 
 class CreateTestData(webapp2.RequestHandler):
+	@ndb.transactional
 	def get(self):
 		application_name = 'testapp'
 		time = datetime.datetime.now()
