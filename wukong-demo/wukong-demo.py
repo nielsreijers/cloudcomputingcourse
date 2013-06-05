@@ -47,8 +47,7 @@ class WKSensor(ndb.Model):
 
 		# TODO: There must be a better way to do this? Can't I get all sensors and values in one query?
 		for sensor in sensors:
-			samples = WKSample.query(ancestor=sensor.key).fetch()
-			sensor.samples = sorted(samples, key=operator.attrgetter('time'))
+			sensor.samples = WKSample.query(ancestor=sensor.key).order(WKSample.time).fetch()
 		return sensors
 
 	# @staticmethod
