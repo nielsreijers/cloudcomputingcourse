@@ -5,6 +5,7 @@
     <link type="text/css" rel="stylesheet" href="/stylesheets/main.css" />
   </head>
   <body>
+    <i>Time spent retrieving samples: {{ elapsed_time }}</i>
     <h3>Sensors:</h3><br>
     {% for sensor in sensors %}
       <b>{{ sensor.name|safe }}</b><br>

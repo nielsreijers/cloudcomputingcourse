@@ -1,4 +1,5 @@
 import cgi
+import time
 import datetime
 import urllib
 import webapp2
@@ -80,7 +81,7 @@ class WKSensor(ndb.Model):
 	# @staticmethod
 	# def get_sensor_data3(application_name):
 	# 	"""Trying something inbetween: get all sensors first, then get all samples with ancestor in those sensors"""
-	# 	sensors = WKSensor.query(ancestor=WKApplication.key_for_application(application_name)).fetch()
+	# 	sensors = WKSensor.query(WKSensor.application_key=WKApplication.key_for_application(application_name)).fetch()
 	# 	samples = WKSample.query(ancestor=WKApplication.key_for_application(application_name)).fetch()
 
 	# 	# This works, but wasn't really was I was looking for. I seems you can't select from multiple ancestors
@@ -89,6 +90,20 @@ class WKSensor(ndb.Model):
 	# 		sensor.samples = [sample for sample in samples if sample.key.parent() == sensor.key]
 
 	# 	return sensors
+
+	@staticmethod
+	def get_sensor_data4(application_name):
+		"""Get the sensor data asynchonously"""
+		sensors = WKSensor.query(WKSensor.application_key==WKApplication.key_for_application(application_name))
+
+		# TODO: There must be a better way to do this? Can't I get all sensors and values in one query?
+		sample_futures = {}
+		for sensor in sensors:
+			sample_futures[sensor.key] = WKSample.query(ancestor=sensor.key).order(WKSample.time).fetch_async()
+		for sensor in sensors:
+			sensor.samples = sample_futures[sensor.key].get_result()
+		return sensors
+
 
 class WKSample(ndb.Model):
 	"""Models a single measurement in a wukong application"""
@@ -118,10 +133,13 @@ class SensorLog(webapp2.RequestHandler):
 	def get(self):
 		application_name = self.request.get('application')
 
-		sensors = WKSensor.get_sensor_data1(application_name)
+		start_time = time.time()
+		sensors = WKSensor.get_sensor_data4(application_name)
+		elapsed_time = time.time() - start_time
 
 		template_values = {'sensors': sensors,
-						'application': application_name}
+						'application': application_name,
+						'elapsed_time': elapsed_time}
 		template = JINJA_ENVIRONMENT.get_template('sensor_log.html')
 		self.response.write(template.render(template_values))
 
@@ -147,8 +165,8 @@ class CreateTestData(webapp2.RequestHandler):
 		application_name = 'testapp'
 		time = datetime.datetime.now()
 		time += datetime.timedelta(days=-1)
-		for sensor_name in ['a', 'b', 'c']:
-			for value in range(100):
+		for sensor_name in ['a', 'b', 'c', 'd']:
+			for value in range(1000):
 				WKSample.logSample(application_name, sensor_name, value, time=time)
 				time += datetime.timedelta(minutes=1)
 		query_params = {'application': 'testapp'}
