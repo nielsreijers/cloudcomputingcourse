@@ -8,6 +8,7 @@ import jinja2
 import operator
 import mapreduce
 import logging
+import pickle
 
 from google.appengine.api import users
 from google.appengine.ext import ndb
@@ -134,9 +135,12 @@ class WKSample(ndb.Model):
 
 class WKSensorSummary(ndb.Model):
 	"""Contains a summary of the sensor data, currently just avg/min/max"""
+	sensor_key = ndb.KeyProperty(kind=WKSensor)
 	avg_value = ndb.FloatProperty()
 	min_value = ndb.IntegerProperty()
 	max_value = ndb.IntegerProperty()
+	min_value_at = ndb.DateTimeProperty()
+	max_value_at = ndb.DateTimeProperty()
 	calculated_at = ndb.DateTimeProperty(auto_now_add=True)
 
 class SensorLog(webapp2.RequestHandler):
@@ -214,18 +218,39 @@ app = webapp2.WSGIApplication([('/sensorlog', SensorLog),
 def sensorsummary_map(data):
 	"""Retrieve the sensor values that go with a sensor"""
 	sensor_key = data
-	sensor = ndb.Key(WKSensor, sensor_key.id_or_name()).get()
+	ndb_sensor_key = ndb.Key(WKSensor, sensor_key.id_or_name())
+	sensor = ndb_sensor_key.get()
 	samples = WKSample.query(ancestor=sensor.key).fetch()
-	yield (sensor_key, samples)
+	logging.info("Sample class: %s", samples[0].__class__)
+	reduce_key = sensor_key.id_or_name()
+	for sample in samples:
+		yield (reduce_key, pickle.dumps((sample.time, sample.value)))
 
 def sensorsummary_reduce(key, values):
 	"""Calculate avr, min and max for this sensor."""
-	sensor_values = [sample[0] for sample in values]
-	summary = WKSensorSummary(parent=key,
-							avr_value=sum(sensor_values)/len(sensor_values),
-							min_value=min(sensor_values),
-							max_value=max(sensor_values))
-	summary.put()
+	ndb_sensor_key = ndb.Key(WKSensor, key)
+	samples = [pickle.loads(x) for x in values]
+	logging.info("Key: %s", ndb_sensor_key)
+	logging.info("Key class: %s", ndb_sensor_key.__class__)
+	logging.info("Number of samples: %s", len(samples))
+	logging.info("Samples class: %s", samples.__class__)
+	logging.info("Samples 1st element: %s", samples[0])
+	logging.info("Samples 1st element class: %s", samples[0].__class__)
+	sensor_values = [sample[1] for sample in samples]
+
+	avg_value = sum(sensor_values)/len(sensor_values)
+	min_value = min(sensor_values)
+	min_value_at = next(x[0] for x in samples if x[1]==min_value)
+	max_value = max(sensor_values)
+	max_value_at = next(x[0] for x in samples if x[1]==max_value)
+
+	summary = WKSensorSummary(sensor_key=ndb_sensor_key,
+								avg_value=avg_value,
+								min_value=min_value,
+								min_value_at=min_value_at,
+								max_value=max_value,
+								max_value_at=max_value_at)
+	yield summary.put()
 
 class SensorSummaryPipeline(base_handler.PipelineBase):
 	def run(self):
