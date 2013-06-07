@@ -6,10 +6,13 @@ import webapp2
 import os
 import jinja2
 import operator
+import mapreduce
 
 from google.appengine.api import users
 from google.appengine.ext import ndb
 
+from mapreduce import base_handler
+from mapreduce import mapreduce_pipeline
 
 JINJA_ENVIRONMENT = jinja2.Environment(
     loader=jinja2.FileSystemLoader(os.path.dirname(__file__)),
@@ -128,8 +131,14 @@ class WKSample(ndb.Model):
 							time = time)
 		sample.put()
 
-class SensorLog(webapp2.RequestHandler):
+class WKSensorSummary(ndb.Model):
+	"""Contains a summary of the sensor data, currently just avg/min/max"""
+	avg_value = ndb.FloatProperty()
+	min_value = ndb.IntegerProperty()
+	max_value = ndb.IntegerProperty()
+	calculated_at = ndb.DateTimeProperty(auto_now_add=True)
 
+class SensorLog(webapp2.RequestHandler):
 	def get(self):
 		application_name = self.request.get('application')
 
@@ -137,11 +146,30 @@ class SensorLog(webapp2.RequestHandler):
 		sensors = WKSensor.get_sensor_data4(application_name)
 		elapsed_time = time.time() - start_time
 
+		if users.get_current_user():
+			user_text = "Logged in as: " + users.get_current_user().email()
+			url = users.create_logout_url(self.request.uri)
+			url_linktext = "Logout"
+		else:
+			user_text = "Not logged in"
+			url = users.create_login_url(self.request.uri)
+			url_linktext = "Login"
+
+
 		template_values = {'sensors': sensors,
 						'application': application_name,
-						'elapsed_time': elapsed_time}
+						'elapsed_time': elapsed_time,
+						'user_text': user_text,
+						'url': url,
+						'url_linktext': url_linktext}
 		template = JINJA_ENVIRONMENT.get_template('sensor_log.html')
 		self.response.write(template.render(template_values))
+
+	def post(self):
+		pipeline = SensorSummaryPipeline()
+		pipeline.start()
+		self.redirect(pipeline.base_path + "/status?root=" + pipeline.pipeline_id)
+
 
 class LogSample(webapp2.RequestHandler):
 	def post(self):
@@ -181,4 +209,36 @@ app = webapp2.WSGIApplication([('/sensorlog', SensorLog),
 								('/logsample', LogSample),
 								('/createtestdata', CreateTestData)],
                               debug=True)
+
+def sensorsummary_map(data):
+	"""Retrieve the sensor values that go with a sensor"""
+	for sensor_key in data:
+		yield (sensor_key, WKSample.query(ancestor=sensor.key).fetch())
+
+def sensorsummary_reduce(key, values):
+	"""Calculate avr, min and max for this sensor."""
+	sensor_values = [sample.value for sample in values]
+	summary = WKSensorSummary(parent=key,
+							avr_value=sum(sensor_values)/len(sensor_values),
+							min_value=min(sensor_values),
+							max_value=max(sensor_values))
+	summary.put()
+
+class SensorSummaryPipeline(base_handler.PipelineBase):
+	def run(self):
+		output = yield mapreduce_pipeline.MapreducePipeline(
+			"sensorsummary",
+			"wukong-demo.sensorsummary_map",
+			"wukong-demo.sensorsummary_reduce",
+			"mapreduce.input_readers.DatastoreKeyInputReader",
+			"mapreduce.output_writers.BlobstoreOutputWriter",
+			mapper_params={
+			    "entity_kind": WKSensor,
+			    "batch_size": 1
+			},
+			reducer_params={
+			    "mime_type": "text/plain",
+			},
+			shards=16)
+		yield StoreOutput("Phrases", filekey, output)
 

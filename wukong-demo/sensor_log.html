@@ -5,7 +5,28 @@
     <link type="text/css" rel="stylesheet" href="/stylesheets/main.css" />
   </head>
   <body>
+    {{ user_text }}<br>
+    <a href="{{ url|safe }}">{{ url_linktext }}</a>
+    <hr>
+
     <i>Time spent retrieving samples: {{ elapsed_time }}</i>
+    <hr>
+
+    Run map reduce job to generate sensor summary data:
+    <form action="/sensorlog?application={{ application }}" method="post">
+      <input type="submit" id="mapreduce" name="index" value="run!">
+    </form>
+    <hr>
+
+    <h3>Manually enter a sample:</h3>
+    <form action="/logsample" method="post">
+      Application: <input value="{{ application }}" name="application"><br>
+      Sensor: <input value="" name="sensor"><br>
+      Value: <input value="" name="value"><br>
+      <input type="submit" value="submit">
+    </form>
+    <hr>
+
     <h3>Sensors:</h3><br>
     {% for sensor in sensors %}
       <b>{{ sensor.name|safe }}</b><br>
@@ -15,15 +36,6 @@
       <br>
     {% endfor %}
     <hr>
-    <h3>Manually enter a sample:</h3>
-
-    <form action="/logsample" method="post">
-      Application: <input value="{{ application }}" name="application"><br>
-      Sensor: <input value="" name="sensor"><br>
-      Value: <input value="" name="value"><br>
-      <input type="submit" value="submit">
-    </form>
-
   </body>
 </html>
 {% endautoescape %}

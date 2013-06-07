@@ -2,11 +2,14 @@ application: wukong-demo
 version: 1
 runtime: python27
 api_version: 1
-threadsafe: true
+threadsafe: false
 
 handlers:
 - url: /stylesheets
   static_dir: stylesheets
+
+- url: /mapreduce(/.*)?
+  script: $PYTHON_LIB/google/appengine/ext/mapreduce/main.py
 
 - url: /.*
   script: wukong-demo.app
@@ -16,3 +19,6 @@ libraries:
   version: latest
 - name: jinja2
   version: latest
+
+includes:
+- mapreduce/include.yaml
