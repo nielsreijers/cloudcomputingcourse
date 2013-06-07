@@ -30,6 +30,15 @@
     <h3>Sensors:</h3><br>
     {% for sensor in sensors %}
       <b>{{ sensor.name|safe }}</b><br>
+
+      {% if sensor.summary %}
+      Summary, calculated at {{ sensor.summary.calculated_at }}:<br>
+      &nbsp;&nbsp; avg value {{ sensor.summary.avg_value }}<br>
+      &nbsp;&nbsp; min value {{ sensor.summary.min_value }} at {{ sensor.summary.min_value_at }}<br>
+      &nbsp;&nbsp; max value {{ sensor.summary.max_value }} at {{ sensor.summary.max_value_at }}<br>
+      {% endif %}
+      <br>
+
       {% for sample in sensor.samples %}
         Time: {{ sample.time }}, value: {{ sample.value }}<br>
       {% endfor %}

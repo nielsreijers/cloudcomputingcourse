@@ -14,3 +14,9 @@ indexes:
   ancestor: yes
   properties:
   - name: time
+
+- kind: WKSensorSummary
+  properties:
+  - name: sensor_key
+  - name: calculated_at
+    direction: desc

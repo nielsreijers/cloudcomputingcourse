@@ -149,6 +149,12 @@ class SensorLog(webapp2.RequestHandler):
 
 		start_time = time.time()
 		sensors = WKSensor.get_sensor_data4(application_name)
+		for sensor in sensors:
+			summaries = WKSensorSummary.query(WKSensorSummary.sensor_key==sensor.key).order(-WKSensorSummary.calculated_at).fetch(1)
+			if summaries:
+				sensor.summary = summaries[0]
+			else:
+				sensor.summary = None
 		elapsed_time = time.time() - start_time
 
 		if users.get_current_user():
