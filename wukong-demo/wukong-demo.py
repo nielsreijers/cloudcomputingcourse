@@ -7,6 +7,7 @@ import os
 import jinja2
 import operator
 import mapreduce
+import logging
 
 from google.appengine.api import users
 from google.appengine.ext import ndb
@@ -212,12 +213,14 @@ app = webapp2.WSGIApplication([('/sensorlog', SensorLog),
 
 def sensorsummary_map(data):
 	"""Retrieve the sensor values that go with a sensor"""
-	for sensor_key in data:
-		yield (sensor_key, WKSample.query(ancestor=sensor.key).fetch())
+	sensor_key = data
+	sensor = ndb.Key(WKSensor, sensor_key.id_or_name()).get()
+	samples = WKSample.query(ancestor=sensor.key).fetch()
+	yield (sensor_key, samples)
 
 def sensorsummary_reduce(key, values):
 	"""Calculate avr, min and max for this sensor."""
-	sensor_values = [sample.value for sample in values]
+	sensor_values = [sample[0] for sample in values]
 	summary = WKSensorSummary(parent=key,
 							avr_value=sum(sensor_values)/len(sensor_values),
 							min_value=min(sensor_values),
@@ -233,12 +236,12 @@ class SensorSummaryPipeline(base_handler.PipelineBase):
 			"mapreduce.input_readers.DatastoreKeyInputReader",
 			"mapreduce.output_writers.BlobstoreOutputWriter",
 			mapper_params={
-			    "entity_kind": WKSensor,
-			    "batch_size": 1
+			    "entity_kind": "WKSensor",
+			    "batch_size": 2
 			},
 			reducer_params={
 			    "mime_type": "text/plain",
 			},
 			shards=16)
-		yield StoreOutput("Phrases", filekey, output)
+		# yield StoreOutput("Phrases", filekey, output)
 
