@@ -120,7 +120,7 @@ class WKSample(ndb.Model):
 		application = WKApplication.get_or_insert(application_name,
 													name=application_name)
 
-		sensor = WKSensor.get_or_insert(sensor_name,
+		sensor = WKSensor.get_or_insert(str(application.key) + "/" + sensor_name,
 										application_key=application.key,
 										name=sensor_name)
 
