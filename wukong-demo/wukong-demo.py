@@ -200,20 +200,23 @@ class LogSample(webapp2.RequestHandler):
 
 class CreateTestData(webapp2.RequestHandler):
 	@ndb.transactional(xg=True)
-	def createWithCrossGroupTransaction(self):
-		application_name = 'testapp'
+	def createWithCrossGroupTransaction(self, application_name):
 		time = datetime.datetime.now()
 		time += datetime.timedelta(days=-1)
-		for sensor_name in ['a', 'b', 'c', 'd']:
+		for sensor_name in ['a', 'b', 'c', 'd2']:
 			for value in range(1000):
 				WKSample.logSample(application_name, sensor_name, value, time=time)
 				time += datetime.timedelta(minutes=1)
 		query_params = {'application': 'testapp'}
 		self.redirect('/sensorlog?' + urllib.urlencode(query_params))
 
+	def post(self):
+		return self.get()
+
 	def get(self):
-		self.createWithCrossGroupTransaction()
-		query_params = {'application': 'testapp'}
+		application_name = self.request.get('application', 'testapp')
+		self.createWithCrossGroupTransaction(application_name)
+		query_params = {'application': application_name}
 		self.redirect('/sensorlog?' + urllib.urlencode(query_params))
 
 app = webapp2.WSGIApplication([('/sensorlog', SensorLog),

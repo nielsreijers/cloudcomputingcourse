@@ -18,6 +18,12 @@
     </form>
     <hr>
 
+    Create test data for this application
+    <form action="/createtestdata?application={{ application }}" method="post">
+      <input type="submit" id="createtestdata" name="index" value="create">
+    </form>
+    <hr>
+
     <h3>Manually enter a sample:</h3>
     <form action="/logsample" method="post">
       Application: <input value="{{ application }}" name="application"><br>
