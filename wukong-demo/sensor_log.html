@@ -33,6 +33,12 @@
     </form>
     <hr>
 
+    <h3>Log</h3>
+    {% for entry in log_entries %}
+    &nbsp;&nbsp; {{ entry.time }}: {{ entry.message }}<br>
+    {% endfor %}
+    <hr>
+
     <h3>Sensors:</h3><br>
     {% for sensor in sensors %}
       <b>{{ sensor.name|safe }}</b><br>

@@ -32,6 +32,20 @@ JINJA_ENVIRONMENT = jinja2.Environment(
 # this suggests sensors+their samples can be a group, but the
 # link from sensor to application should be a reference instead
 
+class WKLog(ndb.Model):
+	message = ndb.StringProperty()
+	time = ndb.DateTimeProperty(auto_now_add=True)
+
+	@staticmethod
+	def log(message):
+		entry = WKLog(message=message)
+		entry.put()
+
+	@staticmethod
+	def get_log():
+		entries = WKLog.query().order(WKLog.time).fetch()
+		return entries
+
 class WKApplication(ndb.Model):
 	"""Root object which models an wukong application"""
 	name = ndb.StringProperty()
@@ -166,17 +180,20 @@ class SensorLog(webapp2.RequestHandler):
 			url = users.create_login_url(self.request.uri)
 			url_linktext = "Login"
 
+		log_entries = WKLog.get_log()
 
 		template_values = {'sensors': sensors,
 						'application': application_name,
 						'elapsed_time': elapsed_time,
 						'user_text': user_text,
 						'url': url,
-						'url_linktext': url_linktext}
+						'url_linktext': url_linktext,
+						'log_entries': log_entries}
 		template = JINJA_ENVIRONMENT.get_template('sensor_log.html')
 		self.response.write(template.render(template_values))
 
 	def post(self):
+		WKLog.log("Starting sensor summary mapreduce pipeline.")
 		pipeline = SensorSummaryPipeline()
 		pipeline.start()
 		self.redirect(pipeline.base_path + "/status?root=" + pipeline.pipeline_id)
