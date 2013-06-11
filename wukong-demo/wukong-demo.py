@@ -12,6 +12,7 @@ import pickle
 
 from google.appengine.api import users
 from google.appengine.ext import ndb
+from google.appengine.api import taskqueue
 
 from mapreduce import base_handler
 from mapreduce import mapreduce_pipeline
@@ -200,11 +201,51 @@ class SensorLog(webapp2.RequestHandler):
 		self.response.write(template.render(template_values))
 
 	def post(self):
-		WKLog.log("Starting sensor summary mapreduce pipeline.")
+		if self.request.get('run_directly'):
+			WKLog.log("Starting sensor summary mapreduce pipeline.")
+			pipeline = SensorSummaryPipeline()
+			pipeline.start()
+			self.redirect(pipeline.base_path + "/status?root=" + pipeline.pipeline_id)
+			return
+		elif self.request.get('start_task_queue'):
+			WKLog.log("Starting task queue for map reduce task.")
+			MapReduceTaskQueue.purge()
+			MapReduceTaskQueue.add_new_task()
+		elif self.request.get('stop_task_queue'):
+			WKLog.log("Stopping task queue for map reduce task.")
+			MapReduceTaskQueue.purge()
+		elif self.request.get('clear_log'):
+			WKLog.clear_log()
+		self.redirect(self.request.url)
+
+
+class MapReduceTaskQueue(webapp2.RequestHandler):
+	@staticmethod
+	def purge():
+		WKLog.log("Purging queue")
+		queue = taskqueue.Queue(name='sensor-summary-queue')
+		queue.purge()
+
+
+	@staticmethod
+	def add_new_task(eta=None):
+		task = None
+		if eta:
+			task = taskqueue.Task(payload=None,
+									url='/mapreducetaskqueue',
+									eta=eta)
+		else:
+			task = taskqueue.Task(payload=None,
+									url='/mapreducetaskqueue')			
+		WKLog.log("Task scheduled with ETA %s" % (eta))
+		task.add(queue_name='sensor-summary-queue')
+
+	def post(self):
+		WKLog.log("Starting sensor summary mapreduce pipeline from task queue.")
 		pipeline = SensorSummaryPipeline()
 		pipeline.start()
-		self.redirect(pipeline.base_path + "/status?root=" + pipeline.pipeline_id)
-
+		WKLog.log("Scheduling new task for next run.")
+		MapReduceTaskQueue.add_new_task(eta=datetime.datetime.now() + datetime.timedelta(hours=1))
 
 class LogSample(webapp2.RequestHandler):
 	def post(self):
@@ -245,7 +286,8 @@ class CreateTestData(webapp2.RequestHandler):
 
 app = webapp2.WSGIApplication([('/sensorlog', SensorLog),
 								('/logsample', LogSample),
-								('/createtestdata', CreateTestData)],
+								('/createtestdata', CreateTestData),
+								('/mapreducetaskqueue', MapReduceTaskQueue)],
                               debug=True)
 
 def sensorsummary_map(data):
@@ -261,6 +303,8 @@ def sensorsummary_map(data):
 
 def sensorsummary_reduce(key, values):
 	"""Calculate avr, min and max for this sensor."""
+	WKLog.log("Running reduce for sensor %s" % (key))
+
 	ndb_sensor_key = ndb.Key(WKSensor, key)
 	samples = [pickle.loads(x) for x in values]
 	logging.info("Key: %s", ndb_sensor_key)

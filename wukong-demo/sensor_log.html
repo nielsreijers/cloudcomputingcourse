@@ -15,7 +15,9 @@
 
     Run map reduce job to generate sensor summary data:
     <form action="/sensorlog?application={{ application }}" method="post">
-      <input type="submit" id="mapreduce" name="index" value="run!">
+      <input type="submit" id="run_directly" name="run_directly" value="run directly!"><br>
+      <input type="submit" id="start_task_queue" name="start_task_queue" value="start task queue">
+      <input type="submit" id="stop_task_queue" name="stop_task_queue" value="stop task queue">
     </form>
     <hr>
 
