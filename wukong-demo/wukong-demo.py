@@ -13,6 +13,7 @@ import pickle
 from google.appengine.api import users
 from google.appengine.ext import ndb
 from google.appengine.api import taskqueue
+from google.appengine.api import runtime
 
 from mapreduce import base_handler
 from mapreduce import mapreduce_pipeline
@@ -166,7 +167,7 @@ class WKSensorSummary(ndb.Model):
 
 class SensorLog(webapp2.RequestHandler):
 	def get(self):
-		application_name = self.request.get('application')
+		application_name = self.request.get('application', 'testapp')
 
 		start_time = time.time()
 		sensors = WKSensor.get_sensor_data4(application_name)
@@ -284,12 +285,6 @@ class CreateTestData(webapp2.RequestHandler):
 		query_params = {'application': application_name}
 		self.redirect('/sensorlog?' + urllib.urlencode(query_params))
 
-app = webapp2.WSGIApplication([('/sensorlog', SensorLog),
-								('/logsample', LogSample),
-								('/createtestdata', CreateTestData),
-								('/mapreducetaskqueue', MapReduceTaskQueue)],
-                              debug=True)
-
 def sensorsummary_map(data):
 	"""Retrieve the sensor values that go with a sensor"""
 	sensor_key = data
@@ -347,3 +342,24 @@ class SensorSummaryPipeline(base_handler.PipelineBase):
 			shards=16)
 		# yield StoreOutput("Phrases", filekey, output)
 
+class SensorSummaryBackend(webapp2.RequestHandler):
+	def get(self):
+		if (self.request.url.endswith('/_ah/start')):
+			WKLog.log("Backend started: %s" % (self.request.url))
+		else:
+			WKLog.log("Backend received unknown request: %s" % (self.request.url))
+def my_shutdown_hook():
+	WKLog.log("Backend shutdown hook called")
+
+
+
+app = webapp2.WSGIApplication([('/', SensorLog),
+								('/sensorlog', SensorLog),
+								('/logsample', LogSample),
+								('/createtestdata', CreateTestData),
+								('/mapreducetaskqueue', MapReduceTaskQueue),
+								('/_ah/start', SensorSummaryBackend)],
+                              debug=True)
+
+
+runtime.set_shutdown_hook(my_shutdown_hook)
