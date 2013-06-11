@@ -6,7 +6,8 @@
   </head>
   <body>
     {{ user_text }}<br>
-    <a href="{{ url|safe }}">{{ url_linktext }}</a>
+    <a href="{{ url|safe }}">{{ url_linktext }}</a><br>
+    Current time: {{ current_time }}
     <hr>
 
     <i>Time spent retrieving samples: {{ elapsed_time }}</i>
@@ -34,6 +35,9 @@
     <hr>
 
     <h3>Log</h3>
+    <form action="/sensorlog?application={{ application }}" method="post">
+      <input type="submit" id="clear_log" name="clear_log" value="clear log"><br>
+    </form>
     {% for entry in log_entries %}
     &nbsp;&nbsp; {{ entry.time }}: {{ entry.message }}<br>
     {% endfor %}

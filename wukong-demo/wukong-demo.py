@@ -46,6 +46,12 @@ class WKLog(ndb.Model):
 		entries = WKLog.query().order(WKLog.time).fetch()
 		return entries
 
+	@staticmethod
+	def clear_log():
+		keys = WKLog.query().fetch(keys_only=True)
+		ndb.delete_multi(keys)
+
+
 class WKApplication(ndb.Model):
 	"""Root object which models an wukong application"""
 	name = ndb.StringProperty()
@@ -185,6 +191,7 @@ class SensorLog(webapp2.RequestHandler):
 		template_values = {'sensors': sensors,
 						'application': application_name,
 						'elapsed_time': elapsed_time,
+						'current_time': datetime.datetime.now(),
 						'user_text': user_text,
 						'url': url,
 						'url_linktext': url_linktext,
